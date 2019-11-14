@@ -69,6 +69,7 @@ void rdbCheckThenExit(int linenum, char *reason, ...) {
     exit(1);
 }
 
+/* 将键值对的类型写入到rio中 */
 static int rdbWriteRaw(rio *rdb, void *p, size_t len) {
     if (rdb && rioWrite(rdb,p,len) == 0)
         return -1;
@@ -87,6 +88,7 @@ void rdbLoadRaw(rio *rdb, void *buf, uint64_t len) {
     }
 }
 
+/* 保存键值对的类型 */
 int rdbSaveType(rio *rdb, unsigned char type) {
     return rdbWriteRaw(rdb,&type,1);
 }
@@ -434,34 +436,33 @@ ssize_t rdbSaveRawString(rio *rdb, unsigned char *s, size_t len) {
     return nwritten;
 }
 
-/* Save a long long value as either an encoded string or a string. */
+/* 将long long类型的字符串对象进行编码，并保存到rio中. */
 ssize_t rdbSaveLongLongAsStringObject(rio *rdb, long long value) {
     unsigned char buf[32];
     ssize_t n, nwritten = 0;
-    int enclen = rdbEncodeInteger(value,buf);
+    int enclen = rdbEncodeInteger(value,buf);       /* 对字符串对象以整型编码方式进行编码 */
     if (enclen > 0) {
-        return rdbWriteRaw(rdb,buf,enclen);
+        return rdbWriteRaw(rdb,buf,enclen);         /* 将编码的字符串对象写到rio */
     } else {
         /* Encode as string */
-        enclen = ll2string((char*)buf,32,value);
+        enclen = ll2string((char*)buf,32,value);    /* 转换为字符串 */
         serverAssert(enclen < 32);
-        if ((n = rdbSaveLen(rdb,enclen)) == -1) return -1;
+        if ((n = rdbSaveLen(rdb,enclen)) == -1) return -1;      /* 将字符串长度写入rio中 */
         nwritten += n;
-        if ((n = rdbWriteRaw(rdb,buf,enclen)) == -1) return -1;
+        if ((n = rdbWriteRaw(rdb,buf,enclen)) == -1) return -1; /* 将字符串对象写入rio中 */
         nwritten += n;
     }
     return nwritten;
 }
 
-/* Like rdbSaveRawString() gets a Redis object instead. */
+/* 将字符串对象写到rio中 */
 ssize_t rdbSaveStringObject(rio *rdb, robj *obj) {
-    /* Avoid to decode the object, then encode it again, if the
-     * object is already integer encoded. */
-    if (obj->encoding == OBJ_ENCODING_INT) {
-        return rdbSaveLongLongAsStringObject(rdb,(long)obj->ptr);
+    /* 如果字符串对象是整型编码，则避免解码字符串对象并再一次编码 */
+    if (obj->encoding == OBJ_ENCODING_INT) {                        /* 如果字符串对象是INT编码 */
+        return rdbSaveLongLongAsStringObject(rdb,(long)obj->ptr);   /* 编码并发送给rio */
     } else {
         serverAssertWithInfo(NULL,obj,sdsEncodedObject(obj));
-        return rdbSaveRawString(rdb,obj->ptr,sdslen(obj->ptr));
+        return rdbSaveRawString(rdb,obj->ptr,sdslen(obj->ptr));     /* 将字符串对象写到rio */
     }
 }
 
@@ -621,31 +622,31 @@ int rdbLoadBinaryFloatValue(rio *rdb, float *val) {
     return 0;
 }
 
-/* Save the object type of object "o". */
+/* 保存类型 */
 int rdbSaveObjectType(rio *rdb, robj *o) {
     switch (o->type) {
-    case OBJ_STRING:
+    case OBJ_STRING:                                            /* 字符串类型 */
         return rdbSaveType(rdb,RDB_TYPE_STRING);
-    case OBJ_LIST:
+    case OBJ_LIST:                                              /* 列表类型 */
         if (o->encoding == OBJ_ENCODING_QUICKLIST)
             return rdbSaveType(rdb,RDB_TYPE_LIST_QUICKLIST);
         else
             serverPanic("Unknown list encoding");
-    case OBJ_SET:
+    case OBJ_SET:                                               /* 集合类型 */
         if (o->encoding == OBJ_ENCODING_INTSET)
             return rdbSaveType(rdb,RDB_TYPE_SET_INTSET);
         else if (o->encoding == OBJ_ENCODING_HT)
             return rdbSaveType(rdb,RDB_TYPE_SET);
         else
             serverPanic("Unknown set encoding");
-    case OBJ_ZSET:
+    case OBJ_ZSET:                                              /* 有序集合类型 */
         if (o->encoding == OBJ_ENCODING_ZIPLIST)
             return rdbSaveType(rdb,RDB_TYPE_ZSET_ZIPLIST);
         else if (o->encoding == OBJ_ENCODING_SKIPLIST)
             return rdbSaveType(rdb,RDB_TYPE_ZSET_2);
         else
             serverPanic("Unknown sorted set encoding");
-    case OBJ_HASH:
+    case OBJ_HASH:                                              /* 哈希类型 */
         if (o->encoding == OBJ_ENCODING_ZIPLIST)
             return rdbSaveType(rdb,RDB_TYPE_HASH_ZIPLIST);
         else if (o->encoding == OBJ_ENCODING_HT)
@@ -754,12 +755,10 @@ size_t rdbSaveStreamConsumers(rio *rdb, streamCG *cg) {
 ssize_t rdbSaveObject(rio *rdb, robj *o, robj *key) {
     ssize_t n = 0, nwritten = 0;
 
-    if (o->type == OBJ_STRING) {
-        /* Save a string value */
+    if (o->type == OBJ_STRING) {        /* 保存字符串值 */
         if ((n = rdbSaveStringObject(rdb,o)) == -1) return -1;
         nwritten += n;
-    } else if (o->type == OBJ_LIST) {
-        /* Save a list value */
+    } else if (o->type == OBJ_LIST) {   /* 保存列表值 */
         if (o->encoding == OBJ_ENCODING_QUICKLIST) {
             quicklist *ql = o->ptr;
             quicklistNode *node = ql->head;
@@ -782,7 +781,7 @@ ssize_t rdbSaveObject(rio *rdb, robj *o, robj *key) {
         } else {
             serverPanic("Unknown list encoding");
         }
-    } else if (o->type == OBJ_SET) {
+    } else if (o->type == OBJ_SET) {    /* 保存集合值 */
         /* Save a set value */
         if (o->encoding == OBJ_ENCODING_HT) {
             dict *set = o->ptr;
@@ -814,7 +813,7 @@ ssize_t rdbSaveObject(rio *rdb, robj *o, robj *key) {
         } else {
             serverPanic("Unknown set encoding");
         }
-    } else if (o->type == OBJ_ZSET) {
+    } else if (o->type == OBJ_ZSET) {   /* 保存有序集合值 */
         /* Save a sorted set value */
         if (o->encoding == OBJ_ENCODING_ZIPLIST) {
             size_t l = ziplistBlobLen((unsigned char*)o->ptr);
@@ -850,7 +849,7 @@ ssize_t rdbSaveObject(rio *rdb, robj *o, robj *key) {
         } else {
             serverPanic("Unknown sorted set encoding");
         }
-    } else if (o->type == OBJ_HASH) {
+    } else if (o->type == OBJ_HASH) {   /* 保存哈希值 */
         /* Save a hash value */
         if (o->encoding == OBJ_ENCODING_ZIPLIST) {
             size_t l = ziplistBlobLen((unsigned char*)o->ptr);
@@ -1003,21 +1002,20 @@ size_t rdbSavedObjectLen(robj *o) {
     return len;
 }
 
-/* Save a key-value pair, with expire time, type, key, value.
- * On error -1 is returned.
- * On success if the key was actually saved 1 is returned, otherwise 0
- * is returned (the key was already expired). */
+/* 保存键值对：key、value、类型、过期时间。
+ * 返回值：-1--出错；1--保存成功；0--键已经过期。
+ */
 int rdbSaveKeyValuePair(rio *rdb, robj *key, robj *val, long long expiretime) {
     int savelru = server.maxmemory_policy & MAXMEMORY_FLAG_LRU;
     int savelfu = server.maxmemory_policy & MAXMEMORY_FLAG_LFU;
 
-    /* Save the expire time */
+    /* 1)保存过期时间 */
     if (expiretime != -1) {
-        if (rdbSaveType(rdb,RDB_OPCODE_EXPIRETIME_MS) == -1) return -1;
-        if (rdbSaveMillisecondTime(rdb,expiretime) == -1) return -1;
+        if (rdbSaveType(rdb,RDB_OPCODE_EXPIRETIME_MS) == -1) return -1;     /* 将毫秒过期时间写入rio */
+        if (rdbSaveMillisecondTime(rdb,expiretime) == -1) return -1;        /* 将过期时间写入rio */
     }
 
-    /* Save the LRU info. */
+    /* 2)保存LRU信息. */
     if (savelru) {
         uint64_t idletime = estimateObjectIdleTime(val);
         idletime /= 1000; /* Using seconds is enough and requires less space.*/
@@ -1025,7 +1023,7 @@ int rdbSaveKeyValuePair(rio *rdb, robj *key, robj *val, long long expiretime) {
         if (rdbSaveLen(rdb,idletime) == -1) return -1;
     }
 
-    /* Save the LFU info. */
+    /* 3)保存LFU信息. */
     if (savelfu) {
         uint8_t buf[1];
         buf[0] = LFUDecrAndReturn(val);
@@ -1037,7 +1035,7 @@ int rdbSaveKeyValuePair(rio *rdb, robj *key, robj *val, long long expiretime) {
         if (rdbWriteRaw(rdb,buf,1) == -1) return -1;
     }
 
-    /* Save type, key, value */
+    /* 保存类型、key、value */
     if (rdbSaveObjectType(rdb,val) == -1) return -1;
     if (rdbSaveStringObject(rdb,key) == -1) return -1;
     if (rdbSaveObject(rdb,val,key) == -1) return -1;
@@ -1140,6 +1138,12 @@ ssize_t rdbSaveSingleModuleAux(rio *rdb, int when, moduleType *mt) {
  * When the function returns C_ERR and if 'error' is not NULL, the
  * integer pointed by 'error' is set to the value of errno just after the I/O
  * error. */
+
+/* rio文件格式：
+ *-------------------------------------------------------------
+ *| REDIS标识 | RDB版本 | 默认辅助信息 | database | EOF | 校验和 |
+ *-------------------------------------------------------------
+ */
 int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
     dictIterator *di = NULL;
     dictEntry *de;
@@ -1148,22 +1152,24 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
     uint64_t cksum;
     size_t processed = 0;
 
+    /* 1)填充rio文件信息 */
     if (server.rdb_checksum)
-        rdb->update_cksum = rioGenericUpdateChecksum;
+        rdb->update_cksum = rioGenericUpdateChecksum;                           /* 计算校验和 */
     snprintf(magic,sizeof(magic),"REDIS%04d",RDB_VERSION);
-    if (rdbWriteRaw(rdb,magic,9) == -1) goto werr;
+    if (rdbWriteRaw(rdb,magic,9) == -1) goto werr;                              /* 填充REDIS标识 */
     if (rdbSaveInfoAuxFields(rdb,flags,rsi) == -1) goto werr;
-    if (rdbSaveModulesAux(rdb, REDISMODULE_AUX_BEFORE_RDB) == -1) goto werr;
+    if (rdbSaveModulesAux(rdb, REDISMODULE_AUX_BEFORE_RDB) == -1) goto werr;    /* 填写默认辅助信息 */
 
+    /* 2)遍历每个数据库，保存信息 */
     for (j = 0; j < server.dbnum; j++) {
-        redisDb *db = server.db+j;
-        dict *d = db->dict;
-        if (dictSize(d) == 0) continue;
-        di = dictGetSafeIterator(d);
+        redisDb *db = server.db+j;          /* 记录当前数据库 */
+        dict *d = db->dict;                 /* 记录当前数据库的字典 */
+        if (dictSize(d) == 0) continue;     /* 如果数据库为空，进行下一个数据库 */
+        di = dictGetSafeIterator(d);        /* 创建字典迭代器 */
 
         /* Write the SELECT DB opcode */
-        if (rdbSaveType(rdb,RDB_OPCODE_SELECTDB) == -1) goto werr;
-        if (rdbSaveLen(rdb,j) == -1) goto werr;
+        if (rdbSaveType(rdb,RDB_OPCODE_SELECTDB) == -1) goto werr;  /* 写入数据库选择的标识码 */
+        if (rdbSaveLen(rdb,j) == -1) goto werr;                     /* 写入数据库ID */
 
         /* Write the RESIZE DB opcode. We trim the size to UINT32_MAX, which
          * is currently the largest type we are able to represent in RDB sizes.
@@ -1176,14 +1182,16 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
         if (rdbSaveLen(rdb,db_size) == -1) goto werr;
         if (rdbSaveLen(rdb,expires_size) == -1) goto werr;
 
-        /* Iterate this DB writing every entry */
+        /* 获取数据库中的所有键值对 */
         while((de = dictNext(di)) != NULL) {
-            sds keystr = dictGetKey(de);
-            robj key, *o = dictGetVal(de);
+            sds keystr = dictGetKey(de);            /* 获取当前的key */
+            robj key, *o = dictGetVal(de);          /* 获取当前key的值 */
             long long expire;
 
-            initStaticStringObject(key,keystr);
-            expire = getExpire(db,&key);
+            initStaticStringObject(key,keystr);     /*  */
+            expire = getExpire(db,&key);            /* 获取当前键的过期时间 */
+
+            /* 将key和value写到rio文件 */
             if (rdbSaveKeyValuePair(rdb,&key,o,expire) == -1) goto werr;
 
             /* When this RDB is produced as part of an AOF rewrite, move
@@ -1259,7 +1267,7 @@ werr: /* Write error. */
     return C_ERR;
 }
 
-/* Save the DB on disk. Return C_ERR on error, C_OK on success. */
+/* 将数据库保存到磁盘中 */
 int rdbSave(char *filename, rdbSaveInfo *rsi) {
     char tmpfile[256];
     char cwd[MAXPATHLEN]; /* Current working dir path for error messages. */
@@ -1267,6 +1275,7 @@ int rdbSave(char *filename, rdbSaveInfo *rsi) {
     rio rdb;
     int error = 0;
 
+    /* 1)创建保存数据库的临时文件 */
     snprintf(tmpfile,256,"temp-%d.rdb", (int) getpid());
     fp = fopen(tmpfile,"w");
     if (!fp) {
@@ -1280,17 +1289,20 @@ int rdbSave(char *filename, rdbSaveInfo *rsi) {
         return C_ERR;
     }
 
+    /* 2)初始化rio对象 */
     rioInitWithFile(&rdb,fp);
 
+    /* 3)自动同步 */
     if (server.rdb_save_incremental_fsync)
         rioSetAutoSync(&rdb,REDIS_AUTOSYNC_BYTES);
 
+    /* 4)将数据库内容写到rio中 */
     if (rdbSaveRio(&rdb,&error,RDB_SAVE_NONE,rsi) == C_ERR) {
         errno = error;
         goto werr;
     }
 
-    /* Make sure data will not remain on the OS's output buffers */
+    /* 将输出缓冲区的内容刷新到磁盘上 */
     if (fflush(fp) == EOF) goto werr;
     if (fsync(fileno(fp)) == -1) goto werr;
     if (fclose(fp) == EOF) goto werr;
@@ -1323,23 +1335,28 @@ werr:
     return C_ERR;
 }
 
+/* 执行RDB持久化操作 */
 int rdbSaveBackground(char *filename, rdbSaveInfo *rsi) {
     pid_t childpid;
     long long start;
 
+    /* 1)判断是否正在进行AOF或RDB持久化操作 */
     if (server.aof_child_pid != -1 || server.rdb_child_pid != -1) return C_ERR;
 
-    server.dirty_before_bgsave = server.dirty;
-    server.lastbgsave_try = time(NULL);
+    server.dirty_before_bgsave = server.dirty;  /* 备份自从上次保存以来，数据库被修改的次数 */
+    server.lastbgsave_try = time(NULL);         /* 记录最后一次尝试执行BGSAVE的时间 */
     openChildInfoPipe();
 
-    start = ustime();
+    /* 2)创建子进程，执行持久化操作 */
+    start = ustime();                           /* 记录fork()函数开始时间 */
     if ((childpid = fork()) == 0) {
         int retval;
 
         /* Child */
-        closeListeningSockets(0);
-        redisSetProcTitle("redis-rdb-bgsave");
+        closeListeningSockets(0);               /* 关闭监听套接字 */
+        redisSetProcTitle("redis-rdb-bgsave");  /* 设置进程标题 */
+
+        /* 2.1)将数据库的数据保存到filename文件中 */
         retval = rdbSave(filename,rsi);
         if (retval == C_OK) {
             size_t private_dirty = zmalloc_get_private_dirty(-1);
@@ -1353,11 +1370,13 @@ int rdbSaveBackground(char *filename, rdbSaveInfo *rsi) {
             server.child_info_data.cow_size = private_dirty;
             sendChildInfo(CHILD_INFO_TYPE_RDB);
         }
+
+        /* 2.2)持久化执行结束，给父进程发送信号：0--成功，1--失败 */
         exitFromChild((retval == C_OK) ? 0 : 1);
     } else {
         /* Parent */
-        server.stat_fork_time = ustime()-start;
-        server.stat_fork_rate = (double) zmalloc_used_memory() * 1000000 / server.stat_fork_time / (1024*1024*1024); /* GB per second. */
+        server.stat_fork_time = ustime()-start;                         /* 创建进程的时间 */
+        server.stat_fork_rate = (double) zmalloc_used_memory() * 1000000 / server.stat_fork_time / (1024*1024*1024); /* 计算fork()速率，GB/s */
         latencyAddSampleIfNeeded("fork",server.stat_fork_time/1000);
         if (childpid == -1) {
             closeChildInfoPipe();
@@ -2466,14 +2485,13 @@ void saveCommand(client *c) {
     }
 }
 
-/* BGSAVE [SCHEDULE] */
+/* BGSAVE [SCHEDULE]命令的实现 */
 void bgsaveCommand(client *c) {
-    int schedule = 0;
+    int schedule = 0;               /* 控制BGSAVE的行为 */
 
-    /* The SCHEDULE option changes the behavior of BGSAVE when an AOF rewrite
-     * is in progress. Instead of returning an error a BGSAVE gets scheduled. */
+    /* 1)当AOF正在重写时，SCHEDULE选项更改BGSAVE的行为，而不是返回错误 */
     if (c->argc > 1) {
-        if (c->argc == 2 && !strcasecmp(c->argv[1]->ptr,"schedule")) {
+        if (c->argc == 2 && !strcasecmp(c->argv[1]->ptr,"schedule")) {      /* 设置schedule参数 */
             schedule = 1;
         } else {
             addReply(c,shared.syntaxerr);
@@ -2481,14 +2499,16 @@ void bgsaveCommand(client *c) {
         }
     }
 
+    /* 2) */
     rdbSaveInfo rsi, *rsiptr;
     rsiptr = rdbPopulateSaveInfo(&rsi);
 
-    if (server.rdb_child_pid != -1) {
+    /* 3)执行RDB持久化操作 */
+    if (server.rdb_child_pid != -1) {                                           /* 如果正在执行RDB持久化操作，回复错误 */
         addReplyError(c,"Background save already in progress");
-    } else if (server.aof_child_pid != -1) {
+    } else if (server.aof_child_pid != -1) {                                    /* 如果正在执行AOF持久化操作，将RDB提上日程 */
         if (schedule) {
-            server.rdb_bgsave_scheduled = 1;
+            server.rdb_bgsave_scheduled = 1;                                    /* 设置服务端schedule参数 */
             addReplyStatus(c,"Background saving scheduled");
         } else {
             addReplyError(c,
@@ -2496,7 +2516,7 @@ void bgsaveCommand(client *c) {
                 "Use BGSAVE SCHEDULE in order to schedule a BGSAVE whenever "
                 "possible.");
         }
-    } else if (rdbSaveBackground(server.rdb_filename,rsiptr) == C_OK) {
+    } else if (rdbSaveBackground(server.rdb_filename,rsiptr) == C_OK) {         /* 执行RDB持久化操作 */
         addReplyStatus(c,"Background saving started");
     } else {
         addReply(c,shared.err);

@@ -90,11 +90,12 @@ typedef struct _rio rio;
  * actual implementation of read / write / tell, and will update the checksum
  * if needed. */
 
+/* 通过write()方法将键值对的类型写入到rio中 */
 static inline size_t rioWrite(rio *r, const void *buf, size_t len) {
     while (len) {
         size_t bytes_to_write = (r->max_processing_chunk && r->max_processing_chunk < len) ? r->max_processing_chunk : len;
         if (r->update_cksum) r->update_cksum(r,buf,bytes_to_write);
-        if (r->write(r,buf,bytes_to_write) == 0)
+        if (r->write(r,buf,bytes_to_write) == 0)        /* 通过write方法写到rio中 */
             return 0;
         buf = (char*)buf + bytes_to_write;
         len -= bytes_to_write;
