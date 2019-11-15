@@ -1069,14 +1069,14 @@ ssize_t rdbSaveAuxFieldStrInt(rio *rdb, char *key, long long val) {
 
 /* Save a few default AUX fields with information about the RDB generated. */
 int rdbSaveInfoAuxFields(rio *rdb, int flags, rdbSaveInfo *rsi) {
-    int redis_bits = (sizeof(void*) == 8) ? 64 : 32;
+    int redis_bits = (sizeof(void*) == 8) ? 64 : 32;                                    /* 判断系统位数 */
     int aof_preamble = (flags & RDB_SAVE_AOF_PREAMBLE) != 0;
 
-    /* Add a few fields about the state when the RDB was created. */
-    if (rdbSaveAuxFieldStrStr(rdb,"redis-ver",REDIS_VERSION) == -1) return -1;
-    if (rdbSaveAuxFieldStrInt(rdb,"redis-bits",redis_bits) == -1) return -1;
-    if (rdbSaveAuxFieldStrInt(rdb,"ctime",time(NULL)) == -1) return -1;
-    if (rdbSaveAuxFieldStrInt(rdb,"used-mem",zmalloc_used_memory()) == -1) return -1;
+    /* 1)添加一些有关RDB创建的字段状态信息. */
+    if (rdbSaveAuxFieldStrStr(rdb,"redis-ver",REDIS_VERSION) == -1) return -1;          /* 版本信息 */
+    if (rdbSaveAuxFieldStrInt(rdb,"redis-bits",redis_bits) == -1) return -1;            /* Redis位数信息 */
+    if (rdbSaveAuxFieldStrInt(rdb,"ctime",time(NULL)) == -1) return -1;                 /* 当前时间信息 */
+    if (rdbSaveAuxFieldStrInt(rdb,"used-mem",zmalloc_used_memory()) == -1) return -1;   /* 当前Redis使用的内存数 */
 
     /* Handle saving options that generate aux fields. */
     if (rsi) {
@@ -1167,7 +1167,6 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
         if (dictSize(d) == 0) continue;     /* 如果字典为空，进行下一个数据库 */
         di = dictGetSafeIterator(d);        /* 创建字典迭代器 */
 
-        /* Write the SELECT DB opcode */
         if (rdbSaveType(rdb,RDB_OPCODE_SELECTDB) == -1) goto werr;  /* 写入数据库选择的标识码 */
         if (rdbSaveLen(rdb,j) == -1) goto werr;                     /* 写入数据库ID */
 
