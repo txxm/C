@@ -541,21 +541,24 @@ long long dictFingerprint(dict *d) {
 
 dictIterator *dictGetIterator(dict *d)
 {
+    /* 1)设置迭代器头部结构 */
     dictIterator *iter = zmalloc(sizeof(*iter));
 
-    iter->d = d;
-    iter->table = 0;
-    iter->index = -1;
-    iter->safe = 0;
-    iter->entry = NULL;
-    iter->nextEntry = NULL;
+    /* 2)设置迭代器属性 */
+    iter->d = d;                /* 将要操作的字典 */
+    iter->table = 0;            /* 使用h[0]，即0号哈希表 */
+    iter->index = -1;           /* 桶索引为-1 */
+    iter->safe = 0;             /* 默认为不安全的迭代器 */
+    iter->entry = NULL;         /* 哈希表中的桶 */
+    iter->nextEntry = NULL;     /* 下一个桶 */
     return iter;
 }
 
+/* 创建字典迭代器 */
 dictIterator *dictGetSafeIterator(dict *d) {
     dictIterator *i = dictGetIterator(d);
 
-    i->safe = 1;
+    i->safe = 1;    /* 设置为安全的迭代器 */
     return i;
 }
 

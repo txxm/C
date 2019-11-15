@@ -1164,7 +1164,7 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
     for (j = 0; j < server.dbnum; j++) {
         redisDb *db = server.db+j;          /* 记录当前数据库 */
         dict *d = db->dict;                 /* 记录当前数据库的字典 */
-        if (dictSize(d) == 0) continue;     /* 如果数据库为空，进行下一个数据库 */
+        if (dictSize(d) == 0) continue;     /* 如果字典为空，进行下一个数据库 */
         di = dictGetSafeIterator(d);        /* 创建字典迭代器 */
 
         /* Write the SELECT DB opcode */
@@ -1176,19 +1176,19 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
          * However this does not limit the actual size of the DB to load since
          * these sizes are just hints to resize the hash tables. */
         uint64_t db_size, expires_size;
-        db_size = dictSize(db->dict);
-        expires_size = dictSize(db->expires);
+        db_size = dictSize(db->dict);           /* 获取字典中所有节点的数量 */
+        expires_size = dictSize(db->expires);   /* 获取字典中带有超时时间的节点数量 */
         if (rdbSaveType(rdb,RDB_OPCODE_RESIZEDB) == -1) goto werr;
         if (rdbSaveLen(rdb,db_size) == -1) goto werr;
         if (rdbSaveLen(rdb,expires_size) == -1) goto werr;
 
-        /* 获取数据库中的所有键值对 */
+        /* 遍历哈希表中的每一个节点 */
         while((de = dictNext(di)) != NULL) {
             sds keystr = dictGetKey(de);            /* 获取当前的key */
             robj key, *o = dictGetVal(de);          /* 获取当前key的值 */
             long long expire;
 
-            initStaticStringObject(key,keystr);     /*  */
+            initStaticStringObject(key,keystr);
             expire = getExpire(db,&key);            /* 获取当前键的过期时间 */
 
             /* 将key和value写到rio文件 */

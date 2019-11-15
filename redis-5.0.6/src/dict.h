@@ -105,8 +105,8 @@ typedef void (dictScanBucketFunction)(void *privdata, dictEntry **bucketref);
         (key1) == (key2))
 
 #define dictHashKey(d, key) (d)->type->hashFunction(key)
-#define dictGetKey(he) ((he)->key)
-#define dictGetVal(he) ((he)->v.val)
+#define dictGetKey(he) ((he)->key)                          /* 获取哈希表节点的key */
+#define dictGetVal(he) ((he)->v.val)                        /* 获取哈希表节点的value */
 #define dictGetSignedIntegerVal(he) ((he)->v.s64)
 #define dictGetUnsignedIntegerVal(he) ((he)->v.u64)
 #define dictGetDoubleVal(he) ((he)->v.d)
