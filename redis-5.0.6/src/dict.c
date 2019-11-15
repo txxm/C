@@ -562,19 +562,20 @@ dictIterator *dictGetSafeIterator(dict *d) {
     return i;
 }
 
+/* 查找下一个哈希表节点 */
 dictEntry *dictNext(dictIterator *iter)
 {
     while (1) {
-        if (iter->entry == NULL) {
-            dictht *ht = &iter->d->ht[iter->table];
-            if (iter->index == -1 && iter->table == 0) {
+        if (iter->entry == NULL) {  /* 哈希表节点为空 */
+            dictht *ht = &iter->d->ht[iter->table];         /* 获取0号哈希表 */
+            if (iter->index == -1 && iter->table == 0) {    /* 在遍历前，初始状态 */
                 if (iter->safe)
-                    iter->d->iterators++;
+                    iter->d->iterators++;                   /* 如果是安全的迭代器，迭代器数量加1 */
                 else
                     iter->fingerprint = dictFingerprint(iter->d);
             }
-            iter->index++;
-            if (iter->index >= (long) ht->size) {
+            iter->index++;                                  /* 进行下一个桶 */
+            if (iter->index >= (long) ht->size) {           /* 遍历完所有元素，或者正在更新需要遍历新表 */
                 if (dictIsRehashing(iter->d) && iter->table == 0) {
                     iter->table++;
                     iter->index = 0;
@@ -584,19 +585,18 @@ dictEntry *dictNext(dictIterator *iter)
                 }
             }
             iter->entry = ht->table[iter->index];
-        } else {
+        } else {        /* 哈希表节点不为空 */
             iter->entry = iter->nextEntry;
         }
         if (iter->entry) {
-            /* We need to save the 'next' here, the iterator user
-             * may delete the entry we are returning. */
-            iter->nextEntry = iter->entry->next;
-            return iter->entry;
+            iter->nextEntry = iter->entry->next;            /* 保存下一个要遍历的节点 */
+            return iter->entry;                             /* 返回找到的节点 */
         }
     }
     return NULL;
 }
 
+/* 释放迭代器 */
 void dictReleaseIterator(dictIterator *iter)
 {
     if (!(iter->index == -1 && iter->table == 0)) {
