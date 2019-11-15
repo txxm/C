@@ -566,7 +566,7 @@ dictIterator *dictGetSafeIterator(dict *d) {
 dictEntry *dictNext(dictIterator *iter)
 {
     while (1) {
-        if (iter->entry == NULL) {  /* 哈希表节点为空 */
+        if (iter->entry == NULL) {                          /* 哈希表节点为空 */
             dictht *ht = &iter->d->ht[iter->table];         /* 获取0号哈希表 */
             if (iter->index == -1 && iter->table == 0) {    /* 在遍历前，初始状态 */
                 if (iter->safe)
@@ -577,15 +577,15 @@ dictEntry *dictNext(dictIterator *iter)
             iter->index++;                                  /* 进行下一个桶 */
             if (iter->index >= (long) ht->size) {           /* 遍历完所有元素，或者正在更新需要遍历新表 */
                 if (dictIsRehashing(iter->d) && iter->table == 0) {
-                    iter->table++;
-                    iter->index = 0;
-                    ht = &iter->d->ht[1];
+                    iter->table++;                          /* 下一个哈希表 */
+                    iter->index = 0;                        /* 桶索引设置为0 */
+                    ht = &iter->d->ht[1];                   /* 使用1号哈希表 */
                 } else {
                     break;
                 }
             }
             iter->entry = ht->table[iter->index];
-        } else {        /* 哈希表节点不为空 */
+        } else {                                            /* 哈希表节点不为空 */
             iter->entry = iter->nextEntry;
         }
         if (iter->entry) {

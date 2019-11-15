@@ -1204,8 +1204,8 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
                 aofReadDiffFromParent();
             }
         }
-        dictReleaseIterator(di);
-        di = NULL; /* So that we don't release it again on error. */
+        dictReleaseIterator(di);    /* 释放迭代器 */
+        di = NULL;                  /* 防止出错时再次释放迭代器. */
     }
 
     /* If we are storing the replication information on disk, persist
