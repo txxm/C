@@ -1,36 +1,6 @@
-/* Hash Tables Implementation.
- *
- * This file implements in-memory hash tables with insert/del/replace/find/
- * get-random-element operations. Hash tables will auto-resize if needed
- * tables of power of two in size are used, collisions are handled by
- * chaining. See the source code for more information... :)
- *
- * Copyright (c) 2006-2012, Salvatore Sanfilippo <antirez at gmail dot com>
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- *   * Redistributions of source code must retain the above copyright notice,
- *     this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in the
- *     documentation and/or other materials provided with the distribution.
- *   * Neither the name of Redis nor the names of its contributors may be used
- *     to endorse or promote products derived from this software without
- *     specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+/* 哈希表实现：
+ * 此文件使用（insert/del/replace/find）实现内存中的哈希表获取随机元素的操作，
+ * 哈希表根据需要自动调整大小到2^n，冲突由链式哈希解决。
  */
 
 #include <stdint.h>
@@ -44,54 +14,51 @@
 /* Unused arguments generate annoying warnings... */
 #define DICT_NOTUSED(V) ((void) V)
 
+/* 哈希表每个桶中节点结构 */
 typedef struct dictEntry {
-    void *key;
+    void *key;                  /* 哈希表中的key */
     union {
         void *val;
         uint64_t u64;
         int64_t s64;
         double d;
-    } v;
-    struct dictEntry *next;
+    } v;                        /* 哈希表中的value（指针、整数、浮点数） */
+    struct dictEntry *next;     /* 指向下一个节点 */
 } dictEntry;
 
 typedef struct dictType {
-    uint64_t (*hashFunction)(const void *key);
-    void *(*keyDup)(void *privdata, const void *key);
-    void *(*valDup)(void *privdata, const void *obj);
-    int (*keyCompare)(void *privdata, const void *key1, const void *key2);
-    void (*keyDestructor)(void *privdata, void *key);
-    void (*valDestructor)(void *privdata, void *obj);
+    uint64_t (*hashFunction)(const void *key);          /* 计算哈希值 */
+    void *(*keyDup)(void *privdata, const void *key);   /* 复制key */
+    void *(*valDup)(void *privdata, const void *obj);   /* 复制value */
+    int (*keyCompare)(void *privdata, const void *key1, const void *key2);  /* 比较key是否相等 */
+    void (*keyDestructor)(void *privdata, void *key);   /* 删除key */
+    void (*valDestructor)(void *privdata, void *obj);   /* 删除value */
 } dictType;
 
-/* This is our hash table structure. Every dictionary has two of this as we
- * implement incremental rehashing, for the old to the new table. */
+/* 哈希表结构 */
 typedef struct dictht {
-    dictEntry **table;
-    unsigned long size;
-    unsigned long sizemask;
-    unsigned long used;
+    dictEntry **table;          /* 存放数组地址，数组用来存放桶 */
+    unsigned long size;         /* 哈希表的大小 */
+    unsigned long sizemask;     /* 哈希掩码(size-1) */
+    unsigned long used;         /* 哈希表中有效节点 */
 } dictht;
 
+/* 字典结构 */
 typedef struct dict {
-    dictType *type;
-    void *privdata;
-    dictht ht[2];
-    long rehashidx; /* rehashing not in progress if rehashidx == -1 */
-    unsigned long iterators; /* number of iterators currently running */
+    dictType *type;             /* 字典类型 */
+    void *privdata;             /* 私有数据 */
+    dictht ht[2];               /* 两个哈希表 */
+    long rehashidx;             /* 重新哈希的计数，rehashidx=-1时表示没有进行rehash */
+    unsigned long iterators;    /* 正在迭代的迭代器数量 */
 } dict;
 
-/* If safe is set to 1 this is a safe iterator, that means, you can call
- * dictAdd, dictFind, and other functions against the dictionary even while
- * iterating. Otherwise it is a non safe iterator, and only dictNext()
- * should be called while iterating. */
+/* 字典迭代器 */
 typedef struct dictIterator {
-    dict *d;
-    long index;
-    int table, safe;
-    dictEntry *entry, *nextEntry;
-    /* unsafe iterator fingerprint for misuse detection. */
-    long long fingerprint;
+    dict *d;                        /* 迭代器对应的字典 */
+    long index;                     /* 哈希表下标（桶索引） */
+    int table, safe;                /* table--h[0]还是h[1]，safe--是否安全(1安全，可进行添加、查找等；不安全只能用dictNext()) */
+    dictEntry *entry, *nextEntry;   /* entry--哈希表中的每一个桶，nextEntry--下一个桶 */
+    long long fingerprint;          /* 不安全的迭代器，使用指纹来检测 */
 } dictIterator;
 
 typedef void (dictScanFunction)(void *privdata, const dictEntry *de);
